@@ -263,7 +263,8 @@ module.exports = (function() {
 		
 		values.setCol = function(ndx, col) {
 			// For now, forbid matrix expansion.
-			if (!isVector(col) || (this.length > 0 && col.length != this.length)) {
+			var sh = this.shape();
+			if (!isVector(col) || col.length != sh[0]) {
 				throw Error('Column insertion must have identical length to existing columns');
 			}
 			if (this.length > 0 && this[0].length < ndx - 1) {
@@ -286,7 +287,7 @@ module.exports = (function() {
 				rows.push(val.add(rhs[ndx]));
 			});
 			return Matrix(rows);
-		}
+		};
 
 		values.sub = function(rhs) {
 			if (Object.keys(rhs).indexOf('isMatrix') < 0) {
@@ -300,10 +301,55 @@ module.exports = (function() {
 				rows.push(val.sub(rhs[ndx]));
 			});
 			return Matrix(rows);
+		};
+		
+		values.copy = function() {
+			// Returns a deep copy of the current matrix values
+			var sh = this.shape();
+			var rows = [];
+			for (var i = 0; i < sh[0]; i++) {
+				var row = [];
+				for (var j = 0; j < sh[1]; j++) {
+					row.push(this[i][j]);
+				}
+				rows.push(row);
+			}
+			return Matrix(rows);
 		}
 		
-		values.mult = function(rhs) {
-			// Need to also implement scalar and vector multiplication
+		values._multScalar = function(rhs) {
+			if (typeof(rhs) != 'number') {
+				throw Error('Scalar multiplication method requires a scalar operand');
+			}
+			var M = this.copy();
+			var sh = M.shape();
+			for (var i = 0; i < sh[0]; i++) {
+				for (var j = 0; j < sh[1]; j++) {
+					M[i][j] = rhs * M[i][j];
+				}
+			}
+			return M;
+		};
+		
+		values._multVector = function(rhs) {
+			if (!isVector(rhs)) {
+				throw Error('Vector multiplication method requires a vector operand');
+			}
+			var sh = this.shape();
+			if (sh[1] != rhs.length) {
+				throw Error('Length of vector operand must match width of matrix');
+			}
+			var values = [];
+			for (var i = 0; i < sh[0]; i++) {
+				values.push(this.row(i).dot(rhs));
+			}
+			return Vector(values);
+		}
+		
+		values._multMatrix = function(rhs) {
+			if (!isMatrix(rhs)) {
+				throw Error('Matrix multiplication method requires a matrix operator');
+			}
 			if (Object.keys(rhs).indexOf('isMatrix') < 0) {
 				rhs = Matrix(rhs);
 			}
@@ -321,6 +367,17 @@ module.exports = (function() {
 			return Matrix(rows);
 		}
 		
+		values.mult = function(rhs) {
+			if (typeof(rhs) == 'number') {
+				return this._multScalar(rhs);
+			} else if (isVector(rhs)) {
+				return this._multVector(rhs);
+			} else if (isMatrix(rhs)) {
+				return this._multMatrix(rhs);
+			}
+			throw Error('Invalid operand for matrix multplication');
+		};
+		
 		values.transpose = function() {
 			var s = this.shape();
 			var result = Matrix.zeros(s[1], s[0]);
@@ -332,10 +389,94 @@ module.exports = (function() {
 			return result;
 		};
 		
+		values.slice = function(I0,If,J0,Jf) {
+			var sh = [If-I0+1, Jf-J0+1];
+			var M = Matrix.zeros(sh[0], sh[1]);
+			for (var i = I0; i <= If; i++) {
+				for (var j = J0; j <= Jf; j++) {
+					M[i-I0][j-J0] = this[i][j];
+				}
+			}
+			return M;
+		};
+		
+		values.inverse = function() {
+			// [[0,1], [1,1.5]] => [[-1.5,1], [1,0]]
+			// [[1,0,2], [3,-3,4], [0,3,1]] => [[-5,2,2], [-1,1/3,2/3], [3,-1,-1]]
+			// [[1,0,0,1], [0,2,1,2], [2,1,0,1], [2,0,1,4]] => [[-2,-0.5,1,0.5], [1,0.5,0,-0.5], [-8,-1,2,2], [3,0.5,-1,-0.5]]
+			var sh = this.shape();
+			if (sh[0] != sh[1]) {
+				throw Error('Matrix inversion can only take place for square matrices');
+			}
+			
+			// Initialize adjoint matrix
+			var AB = Matrix.zeros(sh[0],2*sh[1]);
+			for (var i = 0; i < sh[0]; i++) {
+				for (var j = 0; j < sh[1]; j++) {
+					AB[i][j] = this[i][j];
+				}
+			}
+			for (var i = 0; i < sh[0]; i++) {
+				for (var j = sh[1]; j < 2 * sh[1]; j++) {
+					AB[i][j] = (i == j - sh[1]) + 0;
+				}
+			}
+			
+			// Pivot non-zero diagonals
+			for (var i = 0; i < sh[0]; i++) {
+				if (AB[i][i] == 0) {
+					var ndx = -1;
+					for (var ii = i+1; ii < sh[0]; ii++) {
+						if (ndx < 0 && AB[ii][i] != 0) {
+							ndx = ii;
+							break;
+						}
+					}
+					if (ndx < 0) {
+						throw Error('Could not find valid pivot for diagonal [' + i + '][' + i + ']');
+					}
+					var row = AB.row(i);
+					AB.setRow(i, AB.row(ndx));
+					AB.setRow(ndx, row);
+				}
+			}
+			
+			// Triangular reduction
+			for (var i = 0; i < sh[0]; i++) {
+				for (var ii = i+1; ii < sh[0]; ii++) {
+					var ratio = AB[ii][i] / AB[i][i];
+					if (ratio != 0) {
+						var row = AB.row(ii).mult(1/ratio);
+						AB.setRow(ii, AB.row(i).sub(row));
+					}
+				}
+			}
+			
+			// Normalize triangular edges
+			for (var i = 0; i < sh[0]; i++) {
+				if (AB[i][i] != 1) {
+					var row = AB.row(i);
+					row = row.div(row[i]);
+					AB.setRow(i, row);
+				}
+			}
+			
+			// Upper triangular elimination
+			for (var i = sh[0]-1; i >= 0; i--) {
+				for (var ii = i-1; ii >= 0; ii--) {
+					if (AB[ii][i] != 0) {
+						row = AB.row(i).mult(AB[ii][i]);
+						AB.setRow(ii, AB.row(ii).sub(row));
+					}
+				}
+			}
+			return AB.slice(0,sh[0]-1,sh[0],2*sh[0]-1);
+		};
+		
 		values.isMatrix = true;
 
 		return values;
-	}
+	};
 	
 	Matrix.zeros = function(nRows, nCols) {
 		if (typeof(nCols) == 'undefined') { nCols = nRows; }
