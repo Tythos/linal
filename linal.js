@@ -515,7 +515,32 @@ module.exports = (function() {
 		}
 		return Matrix(rows);
 	};
-
+	
+	Matrix.Rot = {
+		x: function(tht_rad) {
+			var s = Math.sin(tht_rad);
+			var c = Math.cos(tht_rad);
+			return Matrix([
+				[1, 0, 0],
+				[0, c, -s],
+				[0, s, c] ]);
+		}, y: function(tht_rad) {
+			var s = Math.sin(tht_rad);
+			var c = Math.cos(tht_rad);
+			return Matrix([
+				[c, 0, s],
+				[0, 1, 0],
+				[-s, 0, c] ]);
+		}, z: function(tht_rad) {
+			var s = Math.sin(tht_rad);
+			var c = Math.cos(tht_rad);
+			return Matrix([
+				[c, -s, 0],
+				[s, c, 0],
+				[0, 0, 1] ]);
+		}
+	};
+	
 	return {
 		isVector: isVector,
 		isMatrix: isMatrix,
