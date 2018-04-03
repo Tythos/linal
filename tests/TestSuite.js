@@ -35,6 +35,11 @@ define(function(require, exports, module) {
         return eMag / xMag < tolerance;
     };
 
+    TestCase.prototype.assertStringI = function(actual, expected) {
+        // a == b is sufficient for case-sensitive
+        return actual.toLowerCase() == expected.toLowerCase();
+    };
+
     TestCase.prototype.run = function() {
         try {
             if (this.test()) {

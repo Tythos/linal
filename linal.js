@@ -43,9 +43,7 @@ define(function(require, exports, module) {
 		if (lhs.length != rhs.length) {
 			throw Error('Addition operands must have identical lengths');
 		}
-		var values = [];
-		lhs.forEach(function(val,ndx) { values[ndx] = val + rhs[ndx]; });
-		return values;
+		return lhs.map(function(val, ndx) { return val + rhs[ndx]; });
 	};
 			
 	vector.sub = function(lhs, rhs) {
@@ -55,9 +53,7 @@ define(function(require, exports, module) {
 		if (lhs.length != rhs.length) {
 			throw Error('Subtraction operands must have identical lengths');
 		}
-		var values = [];
-		lhs.forEach(function(val,ndx) { values[ndx] = val - rhs[ndx]; });
-		return values;
+		return lhs.map(function(val, ndx) { return val - rhs[ndx]; });
 	};
 
 	vector.dot = function(lhs, rhs) {
@@ -114,19 +110,22 @@ define(function(require, exports, module) {
 	};
 
 	vector.log = function(lhs, rhs) {
+		if (typeof(rhs) == 'undefined') { rhs = Math.exp(1); }
 		if (typeof(rhs) != 'number') {
 			throw Error('RHS of logarithm operator must be a scalar');
 		}
-		var values = [];
-		lhs.forEach(function(val,ndx) { values[ndx] = Math.log(val) / Math.log(rhs); });
-		return values;
+		return lhs.map(function(val) { return Math.log(val) / Math.log(rhs); });
 	};
 			
-	vector.ewo = function(lhs, op) {
-		// Was this supposed to be arbitrary element-wise operation?
-		var values = [];
-		lhs.forEach(function(val,ndx) { values[ndx] = op(val); });
-		return values;
+	vector.elwise = {
+		// Two-operand element-wise operations for basic arithmetic operations; one-operand (exp, log, etc) can be easily invoked with Array.map
+		add: vector.add,
+		sub: vector.sub,
+		mult: function(lhs, rhs) {
+			return lhs.map(function(val, ndx) { return val * rhs[ndx]; });
+		}, div: function(lhs, rhs) {
+			return lhs.map(function(val, ndx) { return val / rhs[ndx]; });
+		}
 	};
 			
 	vector.toString = function(lhs) {
@@ -146,13 +145,15 @@ define(function(require, exports, module) {
 	};
 
 	vector.proj = function(lhs, rhs) {
+		/* Returns the vector LHS projected onto the vector RHS
+		*/
 		if (!vector.isVector(rhs)) {
 			throw Error('RHS of projection operator must be a vector');
 		}
 		if (lhs.length != rhs.length) {
 			throw Error('Projection operands must have identical lengths');
 		}
-		return vector.dot(lhs, rhs) / vector.norm(rhs);
+		return vector.mult(rhs, vector.dot(lhs, rhs) / vector.norm(rhs));
 	};
 			
 	vector.isEqual = function(lhs, rhs) {
