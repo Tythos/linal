@@ -1,7 +1,8 @@
 linal
 =====
 
-Node.js-friendly linear algebra library for streamlined matrix and vector
-calculations. Extends 1d or 2d arrays with matrix and vector methods, providing
-a number of key operations and calculation of properties. Static methods for
-rotation matrices are also provided.
+JavaScript linear algebra library for vector and matrix operations.
+Require.js/AMD-compatible, with the eventual goal of porting to WASM. For this
+reason, and because other JavaScript numeric libraries seem to be in poor state
+of maintenance, emphasis is on ease-of-use in browser environments and
+completeness over Node.js/NPM compatibility and performance.
