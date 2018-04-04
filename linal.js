@@ -185,7 +185,7 @@ define(function(require, exports, module) {
 		var length = -1;
 		if (result) {
 			values.forEach(function(val,ndx) {
-				if (!isVector(val)) {
+				if (!vector.isVector(val)) {
 					result = false;
 				}
 				if (length < 0) {
@@ -218,30 +218,27 @@ define(function(require, exports, module) {
 	matrix.toString = function(lhs) {
 		var str = '';
 		lhs.forEach(function(val, ndx) {
-			if (Object.keys(val).indexOf('isVector') >= 0) {
-				str += (ndx > 0 ? '\n ' : '') + val.toString();
-			} else {
-				str += (ndx > 0 ? '\n ' : '') + Vector.toString(val);
-			}
+			str += (ndx > 0 ? '\n ' : '') + vector.toString(val);
 		});
 		return '[' + str + ']';
 	};
 			
 	matrix.setRow = function(lhs, ndx, row) {
-		// For now, forbid matrix expansion.
-		if (!isVector(row) || (lhs.length > 0 && row.length != lhs[0].length)) {
+		// For now, forbid matrix expansion. Modifies AND returns.
+		if (!vector.isVector(row) || (lhs.length > 0 && row.length != lhs[0].length)) {
 			throw Error('Row insertion must have identical length to existing rows');
 		}
 		if (lhs.length < ndx - 1) {
 			throw Error('Expansion on row assignment currently not allowed');
 		}
-		lhs[ndx] = Vector(row);
+		lhs[ndx] = row;
+		return lhs;
 	};
 			
 	matrix.setCol = function(lhs, ndx, col) {
 		// For now, forbid matrix expansion.
 		var sh = matrix.shape(lhs);
-		if (!isVector(col) || col.length != sh[0]) {
+		if (!vector.isVector(col) || col.length != sh[0]) {
 			throw Error('Column insertion must have identical length to existing columns');
 		}
 		if (lhs.length > 0 && lhs[0].length < ndx - 1) {
@@ -250,28 +247,29 @@ define(function(require, exports, module) {
 		lhs.forEach(function(row, i) {
 			row[ndx] = col[i];
 		});
+		return lhs;
 	};
 			
 	matrix.add = function(lhs, rhs) {
-		if (!lhs.shape().isEqual(rhs.shape())) {
+		var lShape = matrix.shape(lhs);
+		var rShape = matrix.shape(rhs);
+		if (!vector.isEqual(lShape, rShape)) {
 			throw Error('Matrix addition operands must have identical sizes');
 		}
-		var rows = [];
-		lhs.forEach(function(val, ndx) {
-			rows.push(val.add(rhs[ndx]));
+		return lhs.map(function(row, ndx) {
+			return vector.add(row, rhs[ndx]);
 		});
-		return rows;
 	};
 
 	matrix.sub = function(lhs, rhs) {
-		if (!lhs.shape().isEqual(rhs.shape())) {
+		var lShape = matrix.shape(lhs);
+		var rShape = matrix.shape(rhs);
+		if (!vector.isEqual(lShape, rShape)) {
 			throw Error('Matrix subtraction operands must have identical sizes');
 		}
-		var rows = [];
-		lhs.forEach(function(val, ndx) {
-			rows.push(val.sub(rhs[ndx]));
+		return lhs.map(function(row, ndx) {
+			return vector.sub(row, rhs[ndx]);
 		});
-		return rows;
 	};
 			
 	matrix.copy = function(lhs) {
@@ -303,7 +301,7 @@ define(function(require, exports, module) {
 	};
 			
 	matrix.multVector = function(lhs, rhs) {
-		if (!Vector.isVector(rhs)) {
+		if (!vector.isVector(rhs)) {
 			throw Error('Vector multiplication method requires a vector operand');
 		}
 		var sh = matrix.shape(lhs);
@@ -313,25 +311,27 @@ define(function(require, exports, module) {
 		var values = [];
 		for (var i = 0; i < sh[0]; i++) {
 			var row = matrix.row(lhs, i);
-			values.push(Vector.dot(row, rhs));
+			values.push(vector.dot(row, rhs));
 		}
 		return values;
 	};
 			
 	matrix.multMatrix = function(lhs, rhs) {
+		var lShape = matrix.shape(lhs);
+		var rShape = matrix.shape(rhs);
 		if (!matrix.isMatrix(rhs)) {
 			throw Error('Matrix multiplication method requires a matrix operator');
 		}
-		if (matrix.shape(lhs)[1] != matrix.shape(rhs)[0]) {
+		if (lShape[1] != rShape[0]) {
 			throw Error('Matrix multiplication operands must have identical inner dimensions');
 		}
 		var rows = [];
-		for (var i = 0; i < matrix.shape(lhs)[0]; i++) {
+		for (var i = 0; i < lShape[0]; i++) {
 			var row = [];
-			for (var j = 0; j < rhs.shape()[1]; j++) {
-				var row = matrix.row(lhs, i);
-				var col = matrix.col(rhs, j);
-				row.push(Vector.dot(row, col));
+			for (var j = 0; j < rShape[1]; j++) {
+				var lRow = matrix.row(lhs, i);
+				var rCol = matrix.col(rhs, j);
+				row.push(vector.dot(lRow, rCol));
 			}
 			rows.push(row);
 		}
@@ -407,8 +407,8 @@ define(function(require, exports, module) {
 				var ratio = AB[ii][i] / AB[i][i];
 				if (ratio != 0) {
 					var row = matrix.row(AB, ii);
-					row = matrix.mult(row, 1 / ratio);
-					var set = Vector.sub(matrix.row(AB, i), row);
+					row = vector.mult(row, 1 / ratio);
+					var set = vector.sub(matrix.row(AB, i), row);
 					matrix.setRow(AB, ii, set);
 				}
 			}
@@ -418,7 +418,7 @@ define(function(require, exports, module) {
 		for (var i = 0; i < sh[0]; i++) {
 			if (AB[i][i] != 1) {
 				var row = matrix.row(AB, i);
-				row = Vector.div(row, row[i]);
+				row = vector.div(row, row[i]);
 				matrix.setRow(AB, i, row);
 			}
 		}
@@ -427,9 +427,9 @@ define(function(require, exports, module) {
 		for (var i = sh[0]-1; i >= 0; i--) {
 			for (var ii = i-1; ii >= 0; ii--) {
 				if (AB[ii][i] != 0) {
-					var row = AB.row(i);
-					row = matrix.multScalar(row, AB[ii][i]);
-					var set = Vector.sub(matrix.row(AB, ii), row);
+					var row = matrix.row(AB, i);
+					row = vector.mult(row, AB[ii][i]);
+					var set = vector.sub(matrix.row(AB, ii), row);
 					matrix.setRow(AB, ii, set);
 				}
 			}
@@ -503,7 +503,7 @@ define(function(require, exports, module) {
 	return {
 		vector: vector,
 		matrix: matrix,
-		v: vector,
-		m: matrix
+		V: vector,
+		M: matrix
 	};
 });

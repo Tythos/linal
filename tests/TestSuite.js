@@ -40,6 +40,20 @@ define(function(require, exports, module) {
         return actual.toLowerCase() == expected.toLowerCase();
     };
 
+    TestCase.prototype.assertMatrix = function(actual, expected, tolerance) {
+        /* Relative magnitude of each row (assertVector) cannot exceed
+           tolerance. There's probably a better way to do this.
+        */
+        if (typeof(tolerance) == 'undefined') { tolerance = 1e-8; }
+        var passed = true;
+        actual.forEach(function(row, ndx) {
+            if (!this.assertVector(row, expected[ndx], tolerance)) {
+                passed = false;
+            }
+        }, this);
+        return passed;
+    };
+
     TestCase.prototype.run = function() {
         try {
             if (this.test()) {
